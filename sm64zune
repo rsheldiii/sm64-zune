@@ -15,14 +15,14 @@ cd "$root"
 
 die() { echo "sm64zune: $*" >&2; exit 1; }
 
-# Builds one of the two images (the Dockerfile's targets) unless it matches its sources.
+# Each image has its own Dockerfile and cache key.
 image() {
-    local target=$1 tag=sm64-zune-$1 want log=build/logs/docker-$1.log
-    want=$(sha256sum < Dockerfile | cut -c1-16)
+    local target=$1 tag=sm64-zune-$1 dockerfile=Dockerfile.$1 want log=build/logs/docker-$1.log
+    want=$(sha256sum < "$dockerfile" | cut -c1-16)
     [[ $(docker image inspect --format '{{index .Config.Labels "sm64zune"}}' "$tag" 2> /dev/null) != "$want" ]] || return 0
     echo "Building the $target container image (several minutes, once)..."
     mkdir -p build/logs
-    docker build --target "$target" --label "sm64zune=$want" --tag "$tag" . > "$log" 2>&1 \
+    docker build --file "$dockerfile" --label "sm64zune=$want" --tag "$tag" . > "$log" 2>&1 \
         || { tail -n 30 "$log" >&2; die "the $target image did not build; the full output is $log"; }
 }
 
@@ -40,7 +40,7 @@ in_build() {
         ${options[@]+"${options[@]}"} sm64-zune-build "$@"
 }
 
-# This computer's address on the local network, for ZUNE_LOG=upload.
+# This computer's address on the local network, for ZUNE_LOG=on.
 host_address() { ip -4 route get 192.0.2.1 2> /dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p'; }
 
 cmd_build() {

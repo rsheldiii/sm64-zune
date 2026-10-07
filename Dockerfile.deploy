@@ -1,0 +1,25 @@
+# USB deployment image, built on first use by ./sm64zune deploy.
+# Holds zune-deploy and its Zune XNA runtime and USB handshake files.
+# Build this image yourself; do not publish it.
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0-noble AS dotnet
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends build-essential cmake git libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
+# zune-deploy by gigalasr, pinned; the commit also pins its MTP library submodule.
+WORKDIR /zune-deploy
+RUN git clone https://github.com/gigalasr/zune-deploy . \
+    && git checkout --quiet eb5910901c143f5eb303c57086d1d3dbd58fcff1 \
+    && git submodule update --init --recursive
+RUN dotnet publish src/ZuneDeploy.CLI/ZuneDeploy.CLI.csproj --configuration Release \
+        --runtime linux-x64 --self-contained false --output /out
+
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble AS deploy
+ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 LD_LIBRARY_PATH=/opt/zune-deploy
+WORKDIR /opt/zune-deploy
+COPY --from=dotnet /out/ ./
+COPY --from=dotnet /zune-deploy/docs/.mtpz-data /root/.mtpz-data
+RUN ln -s libmtp-ng.so.4.6 libmtp-ng.so.4 \
+    && test -s Assets/DeployableRuntimes/ZuneHD/mscorlib.dll
+ENTRYPOINT ["dotnet", "/opt/zune-deploy/ZuneDeploy.CLI.dll"]

@@ -1,0 +1,16 @@
+# Game build and host-test image, built on first use by ./sm64zune.
+# The compiler and shader tools are downloaded separately into build/toolchain.
+# Generated game files stay in the mounted build/ directory, outside the image.
+FROM debian:bookworm-slim
+# wine: runs the VC9 ARM compiler and NVIDIA's shader compiler (both 32-bit Windows programs).
+# Second line: what sm64ex's own Dockerfile installs, for its build that extracts the ROM.
+# Third line: for unpacking the downloaded installers and applying our patches.
+RUN dpkg --add-architecture i386 \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        wine wine32 \
+        bsdextrautils build-essential git libglew-dev libsdl2-dev python3 \
+        ca-certificates cabextract msitools patch \
+    && rm -rf /var/lib/apt/lists/*
+ENV WINEARCH=win32 WINEDEBUG=-all WINEDLLOVERRIDES="mscoree,mshtml=" PYTHONDONTWRITEBYTECODE=1
+WORKDIR /repo

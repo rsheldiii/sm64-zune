@@ -60,20 +60,31 @@ static DWORD FileSize(const WCHAR *path)
 // offset. Adds what it sent to `done` and redraws the progress bar.
 static bool PostFile(HINTERNET session, const WCHAR *path, const WCHAR *url, DWORD run, DWORD &done, DWORD total)
 {
-    HANDLE file = CreateFile(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
+    HANDLE file = CreateFile(path, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                              FILE_ATTRIBUTE_NORMAL, NULL);
-    if (file == INVALID_HANDLE_VALUE) return true;   // nothing to send
+    if (file == INVALID_HANDLE_VALUE) {
+        DWORD error = GetLastError();
+        return error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND;
+    }
+    // Keep the file stable while sending it. An unreadable, oversized or incomplete file
+    // must not be acknowledged as delivered and deleted by ZuneUploadLogs.
+    DWORD high = 0;
+    DWORD size = GetFileSize(file, &high);
+    if (size == INVALID_FILE_SIZE || high != 0 || size > MAX_FILE) {
+        CloseHandle(file);
+        return false;
+    }
     bool ok = true;
-    for (DWORD offset = 0; offset < MAX_FILE; offset += CHUNK) {
+    for (DWORD offset = 0; offset < size; offset += CHUNK) {
+        DWORD wanted = size - offset < CHUNK ? size - offset : (DWORD)CHUNK;
         DWORD got = 0;
-        if (!ReadFile(file, chunk, CHUNK, &got, NULL) || !got) break;
+        if (!ReadFile(file, chunk, wanted, &got, NULL) || got != wanted) { ok = false; break; }
         WCHAR request[96];
         _snwprintf(request, 95, url, run, offset);
         request[95] = 0;
         if (!Post(session, request, chunk, got)) { ok = false; break; }
         done += got;
         ZuneDrawProgress(total ? (float)done / total : 1.0f, 0);
-        if (got < CHUNK) break;
     }
     CloseHandle(file);
     return ok;
@@ -123,7 +134,7 @@ bool ZuneUploadLogs()
     InternetCloseHandle(session);
     if (ok) {
         DeleteFile(LOG_FILE);
-        DeleteFile(PROFILE_FILE);
+        if (ZUNE_PROFILE) DeleteFile(PROFILE_FILE);
     } else {
         ZuneLog("exit upload: failed after %lu of %lu KiB (is ./sm64zune logs running on %s?)", done / 1024,
                 total / 1024, ZUNE_LOG_HOST);

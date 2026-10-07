@@ -119,6 +119,9 @@ on ARMs without an FPU. One `sin()` costs 13.7 µs. sm64 calls `sqrtf`, `sinf`, 
 
 ## Deployment
 
+- `Dockerfile.build` supplies the game build tools; `Dockerfile.deploy` supplies zune-deploy.
+  `./sm64zune` builds and caches each image independently. The finished `build/package/`
+  directory is passed read-only to the deploy container, which also gets the Zune USB device.
 - zune-deploy can report success after an error. `./sm64zune deploy` goes by the three steps
   it must print, and retries.
 - A transfer that is cut short leaves an app that closes at once. The deployment therefore
@@ -128,6 +131,9 @@ on ARMs without an FPU. One `sin()` costs 13.7 µs. sm64 calls `sqrtf`, `sinf`, 
 
 - `ZUNE_LOG=on` records start-up steps, a statistics line every five seconds and the details
   of a crash, and sends them when the game is left (`./sm64zune logs`).
+  Uploads require a clean exit via the three-finger gesture; startup failures and other
+  crashes leave their logs for a later successful run. The current upload protocol and
+  crash message box have not yet been confirmed on hardware.
 - `ZUNE_PROFILE=on` adds a sampling profiler. `tools/profile.py` charges samples to
   functions with the build's linker map, kept in `build/maps/`.
 - `tools/symbolize.py` names the addresses of a crash, from a log or from the message on

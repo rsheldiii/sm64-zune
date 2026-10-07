@@ -27,11 +27,12 @@ cd sm64-zune
 ./sm64zune deploy
 ```
 
-`build` makes the game from the ROM. The first run takes five to ten minutes: it builds two
-container images, and asks before it downloads the compilers
+`build` makes the game from the ROM. The first run takes five to ten minutes: it creates the
+build container image, and asks before it downloads the compilers
 ([what a build downloads](#what-a-build-downloads)). Later builds take seconds.
 
-`deploy` installs the game on the Zune plugged in over USB. Close any app on the Zune first.
+`deploy` creates its separate container image on first use, then installs the finished
+package on the Zune plugged in over USB. Close any app on the Zune first.
 The copy takes a minute and a half; leave the cable alone until it says `Installed`. Then
 unplug the Zune and start **Super Mario 64** from its apps menu.
 
@@ -105,6 +106,10 @@ names. The Zune must be on the same network as the computer, which listens on po
 while `./sm64zune logs` runs. If the log cannot be delivered it stays on the Zune and goes
 out with the next one.
 
+Logs are uploaded only when you leave with the three-finger gesture. A crash, including
+one during startup, cannot upload its log; a later successful run must send it. The current
+upload protocol and crash message box still need confirmation on hardware.
+
 ### Starting over
 
 `./sm64zune clean` deletes what was built from your ROM;
@@ -123,7 +128,8 @@ out with the next one.
 
 See [docs/porting.md](docs/porting.md) for more.
 
-`./sm64zune test` runs the tests that need no Zune.
+`./sm64zune test` runs the tests that need no Zune or ROM. GitHub Actions runs them on
+pushes and pull requests.
 
 ## What a build downloads
 

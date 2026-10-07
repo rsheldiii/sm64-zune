@@ -1,2 +1,2 @@
-# The images take nothing from this directory but the Dockerfile.
+# Each image takes only its selected Dockerfile from this directory.
 *

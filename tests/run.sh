@@ -34,6 +34,13 @@ echo 'envmixer test passed (patched mixer is bit-exact)'
 echo '759291ad0272d1d35ad987ff0d3b4d86017969bca7662277bcbecead2fa6dfdc  launcher/exploiter.exe' | sha256sum --check --quiet
 echo 'launcher is the tested build'
 
+# Exercise the real upload/delete path with file and HTTP failures, with and without profiles.
+for profile in 0 1; do
+    g++ -std=c++98 "${checks[@]}" -Itests/stubs -DZUNE_LOG=1 '-DZUNE_LOG_HOST="127.0.0.1"' \
+        "-DZUNE_PROFILE=$profile" tests/upload.cpp -o "$out/upload-$profile"
+    "$out/upload-$profile"
+done
+
 # The build's own tools.
 python3 tests/settings_test.py
 python3 tests/receive_logs_test.py
