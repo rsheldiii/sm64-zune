@@ -1,22 +1,18 @@
 # Super Mario 64 for the Zune HD
 
-A port of [sm64ex](https://github.com/sm64pc/sm64ex) to Microsoft's Zune HD.
-Two commands build the game from your own ROM and install it over USB.
-
-It plays at full speed in the levels measured so far, with sound, touch controls and saves.
+A port of [sm64ex](https://github.com/sm64pc/sm64ex) to the Zune HD. It plays (mostly) at full speed with sound, touch controls and saves.
 
 This repository holds no part of the game, and no built game is offered anywhere: you supply
-the ROM, and the copy you build is yours to play, not to share.
+the ROM during the build process.
 
 ## What you need
 
 - A **Zune HD** and its USB cable. Only firmware 4.5 has been tested so far.
-- A **Super Mario 64 (USA)** ROM dumped from your own cartridge: `.z64`, `.n64` or `.v64`.
-  As `.z64` its SHA-1 is `9bef1128717f958171a4afac3ed78ee2bb4e86ce`. The build checks.
+- A **Super Mario 64 (USA)** ROM dumped from your own cartridge. The checksum needs to be `9bef1128717f958171a4afac3ed78ee2bb4e86ce`, The build checks.
 - An **x86-64 Linux** computer with [Docker](https://docs.docker.com/engine/install/) and git,
   6 GB of free disk space, and an internet connection for the first build.
 
-Building and deploying use Docker; no bare-metal workflow is provided.
+Building and deploying uses Docker; no bare-metal workflow is currently provided.
 
 ## Build and install
 
@@ -27,27 +23,18 @@ cd sm64-zune
 ./sm64zune deploy
 ```
 
-`build` makes the game from the ROM. The first run takes five to ten minutes: it creates the
+The first run takes five to ten minutes: it creates the
 build container image, and asks before it downloads the compilers
-([what a build downloads](#what-a-build-downloads)). Later builds take seconds.
+([what a build downloads](#what-a-build-downloads)).
 
-`deploy` creates its separate container image on first use, then installs the finished
-package on the Zune plugged in over USB. Close any app on the Zune first.
-The copy takes a minute and a half; leave the cable alone until it says `Installed`. Then
-unplug the Zune and start **Super Mario 64** from its apps menu.
+`deploy` is a separate container that installs the finished
+package on the Zune plugged in over USB. Close any app on the Zune first. 
 
 ## Playing
 
 ![The touch controls](docs/controls.png)
 
-Hold the Zune sideways, with its home button to the left.
-
-- **Stick:** touch anywhere on the left half of the screen and drag. The stick's centre is
-  where your thumb lands.
-- **Buttons:** A, B, Z, R, START and the four C buttons, on the right.
-- **Leave the game:** hold three fingers on the screen for two seconds.
-- **Saves** work as on the cartridge. The save file stays on the Zune when you install a
-  newer build.
+Hold three fingers on the screen for two seconds to exit.
 
 ## Build flags
 
@@ -127,9 +114,6 @@ The crash message box still needs confirmation on hardware.
 - [zune-deploy](https://github.com/gigalasr/zune-deploy) installs the package over USB.
 
 See [docs/porting.md](docs/porting.md) for more.
-
-`./sm64zune test` runs the tests that need no Zune or ROM. GitHub Actions runs them on
-pushes and pull requests.
 
 ## What a build downloads
 
