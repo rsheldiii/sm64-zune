@@ -1,7 +1,7 @@
 # Super Mario 64 for the Zune HD
 
-A port of [sm64ex](https://github.com/sm64pc/sm64ex) to Microsoft's Zune HD (2009, Tegra APX 2600,
-Windows CE 6). Two commands build the game from your own ROM and install it over USB.
+A port of [sm64ex](https://github.com/sm64pc/sm64ex) to Microsoft's Zune HD.
+Two commands build the game from your own ROM and install it over USB.
 
 It plays at full speed in the levels measured so far, with sound, touch controls and saves.
 
@@ -10,13 +10,13 @@ the ROM, and the copy you build is yours to play, not to share.
 
 ## What you need
 
-- A **Zune HD** on firmware 4.5 (the last one), and its USB cable.
+- A **Zune HD** and its USB cable. Only firmware 4.5 has been tested so far.
 - A **Super Mario 64 (USA)** ROM dumped from your own cartridge: `.z64`, `.n64` or `.v64`.
   As `.z64` its SHA-1 is `9bef1128717f958171a4afac3ed78ee2bb4e86ce`. The build checks.
 - An **x86-64 Linux** computer with [Docker](https://docs.docker.com/engine/install/) and git,
   6 GB of free disk space, and an internet connection for the first build.
 
-Nothing else is installed on your computer: the work happens in containers.
+Building and deploying use Docker; no bare-metal workflow is provided.
 
 ## Build and install
 
@@ -39,7 +39,7 @@ unplug the Zune and start **Super Mario 64** from its apps menu.
 
 ![The touch controls](docs/controls.png)
 
-Hold the Zune sideways, with its home button to the right.
+Hold the Zune sideways, with its home button to the left.
 
 - **Stick:** touch anywhere on the left half of the screen and drag. The stick's centre is
   where your thumb lands.
@@ -48,42 +48,50 @@ Hold the Zune sideways, with its home button to the right.
 - **Saves** work as on the cartridge. The save file stays on the Zune when you install a
   newer build.
 
-## Settings
+## Build flags
 
-| Setting | Values | Default | |
+| Flag | Values | Default | |
 | --- | --- | --- | --- |
-| `ZUNE_FRAME_SKIP` | `never`, `sustained`, `always` | `sustained` | What to do where the Zune cannot keep up: slow down like the N64 (`never`), or skip drawing some frames. |
+| `ZUNE_FRAME_SKIP` | `never`, `sustained`, `always` | `sustained` | What to do when the Zune cannot keep up: slow down like the N64 (`never`), or skip drawing some frames. |
 | `ZUNE_TOUCH_BUTTONS` | `hidden`, `outline`, `filled` | `filled` | How the touch controls are drawn. They work the same in every style. |
 | `ZUNE_TOUCH_OPACITY` | `10` to `100` | `80` | How strongly they are drawn, in percent. |
-| `ZUNE_LOG` | `off`, `on` | `off` | Keep a log and send it to your computer; see [below](#when-something-goes-wrong). |
+| `ZUNE_LOG` | `off`, `on` | `off` | Keep a log and send it to your computer; see [Getting a log](#getting-a-log). |
 | `ZUNE_LOG_HOST` | an IPv4 address | this computer | Where the log is sent. |
 | `ZUNE_PROFILE` | `off`, `on` | `off` | A profiler, for working on the port. |
 
-Settings are chosen when the game is built:
+Flags are chosen when the game is built:
 
 ```sh
 ./sm64zune build rom.z64 --define ZUNE_TOUCH_BUTTONS=outline --define ZUNE_TOUCH_OPACITY=50
-./sm64zune settings        # every setting, explained, with the value the next build would use
+./sm64zune settings        # list build flags and the values the next build would use
 ```
 
-To keep a setting for every build, put `NAME=VALUE` lines in a file named `settings.local`
+To keep a flag for every build, put `NAME=VALUE` lines in a file named `settings.local`
 next to `sm64zune`.
 
-## When something goes wrong
+## Troubleshooting
 
-**`deploy` says "not installed".** Close whatever is running on the Zune, unplug it, plug it
-back in, wait for its "connected" screen and run `./sm64zune deploy` again.
+### `deploy` says "not installed"
+
+Close whatever is running on the Zune, unplug it, plug it back in, wait for its "connected"
+screen and run `./sm64zune deploy` again.
 `build/logs/deploy.log` has the details. Docker must be able to hand a USB device to a
 container; the usual (rootful) Docker can.
 
-**The game closes as soon as it starts.** The copy was most likely cut short. Deploy again.
+### The game closes as soon as it starts
 
-**The game stops with a message.** The message names the build and two addresses. On the
-computer that built it, `python3 tools/symbolize.py ADDRESS ADDRESS` (Python 3) turns them
+The copy was most likely cut short. Deploy again.
+
+### The game stops with a message
+
+The message names the build and two addresses. On the computer that built it,
+`python3 tools/symbolize.py ADDRESS ADDRESS` (Python 3) turns them
 into function names. Please open an issue with the message and those names.
 
-**Getting a log.** Nothing can read files off a Zune over USB, so the game sends its log over
-Wi-Fi when you leave it:
+### Getting a log
+
+Nothing can read files off a Zune over USB, so the game sends its log over Wi-Fi when you
+leave it:
 
 ```sh
 ./sm64zune build rom.z64 --define ZUNE_LOG=on
@@ -97,24 +105,23 @@ names. The Zune must be on the same network as the computer, which listens on po
 while `./sm64zune logs` runs. If the log cannot be delivered it stays on the Zune and goes
 out with the next one.
 
-**Starting over.** `./sm64zune clean` deletes what was built from your ROM;
+### Starting over
+
+`./sm64zune clean` deletes what was built from your ROM;
 `./sm64zune clean --all` deletes the downloaded compilers too.
 
 ## How it works
 
 - sm64ex's own build extracts the game's assets from your ROM and generates its sources.
-- Those sources, [fourteen small patches](patches/) and the Zune layer in [`platform/`](platform/)
-  are compiled with Microsoft's 2008 ARM compiler, the only one that targets the Zune's Windows
-  CE 6. It runs under Wine.
+- Those sources, [compatibility and performance patches](patches/) and the Zune layer in
+  [`platform/`](platform/) are compiled with Microsoft's 2008 ARM compiler under Wine.
 - The Zune's graphics driver cannot compile shaders, so the game's shaders are compiled ahead
   of time with NVIDIA's Tegra tools and built into the game.
 - The Zune only starts XNA programs, so the package holds OpenZDK's small XNA launcher
-  ([`launcher/`](launcher/)), which starts the native game. It is the one prebuilt file here:
-  7 KB, with its source beside it, and nothing of the game in it.
+  ([`launcher/`](launcher/)), which starts the native game.
 - [zune-deploy](https://github.com/gigalasr/zune-deploy) installs the package over USB.
 
-[docs/porting.md](docs/porting.md) has the details: what the Zune's hardware and system
-software turned out to need, and where the time went.
+See [docs/porting.md](docs/porting.md) for more.
 
 `./sm64zune test` runs the tests that need no Zune.
 
@@ -132,10 +139,6 @@ download is checked against a SHA-256 recorded in [`tools/fetch.py`](tools/fetch
 
 The container images hold Debian with Wine and build tools, and zune-deploy with the Zune
 runtime files it carries. sm64ex is a git submodule, which `build` fetches.
-
-These files belong to their owners and come under their terms, which is why this repository
-fetches them instead of including them. For the same reason, do not publish the images or
-anything under `build/`.
 
 ## Licence and disclaimers
 

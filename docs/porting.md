@@ -2,6 +2,8 @@
 
 What the Zune HD needed, for anyone changing this port or writing other native code for
 the device. Everything here was measured or observed on one Zune HD (firmware 4.5).
+The build uses the OpenZDK 4.5 SDK, and the launcher depends on runtime internals.
+Compatibility with earlier firmware has not been established.
 
 ## The device
 
@@ -18,7 +20,7 @@ the device. Everything here was measured or observed on one Zune HD (firmware 4.
 
 ## Compiler
 
-The only compiler that targets the Zune's CE 6 is Visual C++ 2008's (VC9): C89 with
+The build uses Visual C++ 2008's ARM compiler (VC9): C89 with
 Microsoft extensions, and C++98. sm64ex is C99 with GNU extensions.
 
 - `compat/sm64_vc9.h` is included first in every file and supplies the small things:
@@ -37,6 +39,29 @@ Microsoft extensions, and C++98. sm64ex is C99 with GNU extensions.
   requests; nothing is installed.
 - Link order is fixed by `tools/units.txt`, so a build does not depend on the order in which
   a parallel `make` happened to compile sm64ex.
+
+## Patches
+
+All 14 patches apply to the pinned sm64ex revision and affect code used by this build.
+Patches 0001–0008 are required by the compiler. An audit with the build's VC9 compiler and
+flags confirmed that each affected source compiled with its patch and failed without it.
+Patches 0009–0014 reduce CPU work and draw calls; removing them would undo those optimizations.
+
+| Patch | Purpose |
+| --- | --- |
+| 0001 | Expand the colour-combiner macros correctly with Microsoft's preprocessor. |
+| 0002–0005 | Move declarations before statements for VC9's C compiler. |
+| 0006 | Replace variable-length save buffers and C99 declarations with C89 equivalents. |
+| 0007 | Move conditional directives outside the scissor macro's arguments. |
+| 0008 | Add explicit pointer casts for the renderer's C++ wrapper. |
+| 0009 | Skip repeated volume-ramp work once an audio channel's volume has settled. The mixer test checks identical output. |
+| 0010 | Cache vertex-transform inputs and reduce divisions in culling and texture coordinates. |
+| 0011 | Pack vertex colours as bytes. The attribute layout in `platform/zune_render.cpp` requires this format. |
+| 0012 | Keep a draw batch when the requested texture is already bound. Also supplies a counter used by `platform/zune_main.cpp`. |
+| 0013–0014 | Load a larger texture and combine the skybox tiles into one atlas, allowing one draw instead of nine. These patches work together. |
+
+No patch is currently redundant. The performance changes could be reverted with their
+dependent platform code, but their cost should be measured on the Zune before doing so.
 
 ## Floating point
 
