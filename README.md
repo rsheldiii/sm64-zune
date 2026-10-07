@@ -107,8 +107,8 @@ while `./sm64zune logs` runs. If the log cannot be delivered it stays on the Zun
 out with the next one.
 
 Logs are uploaded only when you leave with the three-finger gesture. A crash, including
-one during startup, cannot upload its log; a later successful run must send it. The current
-upload protocol and crash message box still need confirmation on hardware.
+one during startup, cannot upload its log; a later successful run must send it.
+The crash message box still needs confirmation on hardware.
 
 ### Starting over
 

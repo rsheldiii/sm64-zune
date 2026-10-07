@@ -132,8 +132,10 @@ on ARMs without an FPU. One `sin()` costs 13.7 µs. sm64 calls `sqrtf`, `sinf`, 
 - `ZUNE_LOG=on` records start-up steps, a statistics line every five seconds and the details
   of a crash, and sends them when the game is left (`./sm64zune logs`).
   Uploads require a clean exit via the three-finger gesture; startup failures and other
-  crashes leave their logs for a later successful run. The current upload protocol and
-  crash message box have not yet been confirmed on hardware.
+  crashes leave their logs for a later successful run. Clean-exit upload was confirmed on
+  hardware on 2026-10-06: build `20261006-221236` delivered a 67,477-byte log, including
+  earlier runs retained on the Zune. The receiver processed the completion request and
+  found no crash. The crash message box has not yet been confirmed on hardware.
 - `ZUNE_PROFILE=on` adds a sampling profiler. `tools/profile.py` charges samples to
   functions with the build's linker map, kept in `build/maps/`.
 - `tools/symbolize.py` names the addresses of a crash, from a log or from the message on
