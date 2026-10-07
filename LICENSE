@@ -1,0 +1,100 @@
+sm64-zune is made of parts under different terms.
+
+No part of Super Mario 64 is in this repository. The game's code and data come from the ROM
+you supply, by way of sm64ex, and what a build produces from them (everything in build/) is
+yours to play and not to pass on.
+
+
+1. This project's own files
+
+Everything not listed in sections 2 to 4.
+
+MIT License
+
+Copyright (c) 2026 the sm64-zune contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software
+and associated documentation files (the "Software"), to deal in the Software without
+restriction, including without limitation the rights to use, copy, modify, merge, publish,
+distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the
+Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+
+2. Files derived from the Fast3D renderer (n64-fast3d-engine)
+
+platform/zune_render.cpp is a port of sm64ex's src/pc/gfx/gfx_opengl.c, and patches 0008 and
+0010 to 0013 in patches/ change src/pc/gfx/gfx_pc.c. Both files are the Fast3D renderer, whose
+terms apply to these derived files. Note condition 2: a built game contains the ROM's assets,
+so it may not be redistributed.
+
+Copyright (c) 2020 Emill, MaikelChan
+
+Redistribution and use in source forms, with or without modification,
+are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+2. Redistributions in binary form are not allowed except in cases where the binary contains no assets you do not have the right to distribute.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE FOR
+ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
+(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
+LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
+ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+3. The launcher (OpenZDK)
+
+launcher/Engine.cs, launcher/PayloadRunner.cs and launcher/Program.cs are OpenZDK's,
+unchanged: Copyright (c) 2010 itsnotabigtruck, under the terms at the top of each file.
+launcher/exploiter.exe is those files compiled, and comes under the same terms:
+
+Copyright (c) 2010 itsnotabigtruck.
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+ * Redistributions of source code must retain the above copyright notice,
+   this list of conditions and the following disclaimer.
+ * Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED
+WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO
+EVENT SHALL CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED
+OF THE POSSIBILITY OF SUCH DAMAGE.
+
+
+4. sm64ex
+
+sm64ex/ is a git submodule: a pointer to https://github.com/sm64pc/sm64ex, not a copy of it.
+The other patches in patches/ quote lines of sm64ex as context, and platform/zune_main.cpp
+and platform/zune_config.c restate parts of its src/pc glue (pc_main.c, platform.c,
+configfile.c). What they hold of sm64ex stays under whatever terms cover sm64ex.
+
+
+What a build downloads (Microsoft's compiler, the OpenZDK SDK, NVIDIA's shader compiler,
+zune-deploy and the Khronos headers; see README.md) is not part of this repository and
+comes under its owners' terms.

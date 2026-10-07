@@ -1,0 +1,82 @@
+--- a/src/pc/gfx/gfx_pc.c	2026-10-03 12:06:49.842757486 -0400
++++ b/src/pc/gfx/gfx_pc.c	2026-10-03 12:07:05.564617999 -0400
+@@ -751,7 +751,10 @@
+     return x * (4.0f / 3.0f) / ((float)gfx_current_dimensions.width / (float)gfx_current_dimensions.height);
+ }
+ 
++extern unsigned zune_stat_vertices;
++
+ static void gfx_sp_vertex(size_t n_vertices, size_t dest_index, const Vtx *vertices) {
++    zune_stat_vertices += (unsigned)n_vertices;
+     /* Zune HD: hoisted out of the per-vertex loop. The stores below may alias rsp, so the
+        compiler reloaded all 16 matrix floats for every vertex, and the aspect-ratio helper
+        did a float divide (79 ns on this ARM11) per vertex. */
+@@ -865,7 +868,19 @@
+     }
+ }
+ 
++/* Zune HD: per-frame work counters for the frame stats (zune_main.cpp). */
++unsigned zune_stat_vertices, zune_stat_triangles_in;
++
++static inline void zune_store_rgba(float *slot, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
++    uint8_t *bytes = (uint8_t *)slot;
++    bytes[0] = r;
++    bytes[1] = g;
++    bytes[2] = b;
++    bytes[3] = a;
++}
++
+ static void gfx_sp_tri1(uint8_t vtx1_idx, uint8_t vtx2_idx, uint8_t vtx3_idx) {
++    zune_stat_triangles_in++;
+     struct LoadedVertex *v1 = &rsp.loaded_vertices[vtx1_idx];
+     struct LoadedVertex *v2 = &rsp.loaded_vertices[vtx2_idx];
+     struct LoadedVertex *v3 = &rsp.loaded_vertices[vtx3_idx];
+@@ -1024,16 +1039,19 @@
+             buf_vbo[buf_vbo_len++] = v * inv_tex_height;
+         }
+         
++        /* Zune HD: colours are stored as four normalized bytes in one 32-bit slot of
++           buf_vbo (drawn as GL_UNSIGNED_BYTE, normalized), instead of 3-4 floats each: the GPU's
++           /255 gives the same values, with less CPU work here and less vertex data per draw
++           through compclient. zune_render.cpp lays the attributes out to match. */
+         if (use_fog) {
+-            buf_vbo[buf_vbo_len++] = rdp.fog_color.r / 255.0f;
+-            buf_vbo[buf_vbo_len++] = rdp.fog_color.g / 255.0f;
+-            buf_vbo[buf_vbo_len++] = rdp.fog_color.b / 255.0f;
+-            buf_vbo[buf_vbo_len++] = v_arr[i]->color.a / 255.0f; // fog factor (not alpha)
++            zune_store_rgba(&buf_vbo[buf_vbo_len++], rdp.fog_color.r, rdp.fog_color.g, rdp.fog_color.b,
++                            v_arr[i]->color.a); // fog factor (not alpha)
+         }
+         
+         for (int j = 0; j < num_inputs; j++) {
+             struct RGBA *color;
+             struct RGBA tmp;
++            uint8_t rgba[4] = {0, 0, 0, 255};
+             for (int k = 0; k < 1 + (use_alpha ? 1 : 0); k++) {
+                 switch (comb->shader_input_mapping[k][j]) {
+                     case CC_PRIM:
+@@ -1060,18 +1078,19 @@
+                         break;
+                 }
+                 if (k == 0) {
+-                    buf_vbo[buf_vbo_len++] = color->r / 255.0f;
+-                    buf_vbo[buf_vbo_len++] = color->g / 255.0f;
+-                    buf_vbo[buf_vbo_len++] = color->b / 255.0f;
++                    rgba[0] = color->r;
++                    rgba[1] = color->g;
++                    rgba[2] = color->b;
+                 } else {
+                     if (use_fog && color == &v_arr[i]->color) {
+                         // Shade alpha is 100% for fog
+-                        buf_vbo[buf_vbo_len++] = 1.0f;
++                        rgba[3] = 255;
+                     } else {
+-                        buf_vbo[buf_vbo_len++] = color->a / 255.0f;
++                        rgba[3] = color->a;
+                     }
+                 }
+             }
++            zune_store_rgba(&buf_vbo[buf_vbo_len++], rgba[0], rgba[1], rgba[2], rgba[3]);
+         }
+         /*struct RGBA *color = &v_arr[i]->color;
+         buf_vbo[buf_vbo_len++] = color->r / 255.0f;

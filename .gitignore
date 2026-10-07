@@ -1,0 +1,11 @@
+# Everything a build makes or downloads: the tools, the staged sources and the package all
+# hold ROM-derived data or software that may not be redistributed.
+/build/
+# ROMs: yours to supply, never to commit.
+*.z64
+*.n64
+*.v64
+# Your own build settings (./sm64zune settings)
+/settings.local
+__pycache__/
+*.py[cod]

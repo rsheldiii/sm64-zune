@@ -1,0 +1,87 @@
+--- a/src/game/save_file.c
++++ b/src/game/save_file.c
+@@ -69,7 +69,8 @@
+  * Byteswap all multibyte fields in a MainMenuSaveData.
+  */
+ static inline void bswap_menudata(struct MainMenuSaveData *data) {
+-    for (int i = 0; i < NUM_SAVE_FILES; ++i)
++    int i;
++    for (i = 0; i < NUM_SAVE_FILES; ++i)
+         data->coinScoreAges[i] = BSWAP32(data->coinScoreAges[i]);
+     data->soundMode = BSWAP16(data->soundMode);
+ #ifdef VERSION_EU
+@@ -149,10 +150,11 @@
+     return write_eeprom_data(&gSaveBuffer.files[file][slot], num * sizeof(struct SaveFile), ofs);
+ #else
+     // byteswap the data and then write it
+-    struct SaveFile sf[num];
++    struct SaveFile sf[2]; // num is 1 (one slot) or 2 (slot and backup)
++    u32 i;
+     bcopy(&gSaveBuffer.files[file][slot], sf, num * sizeof(sf[0]));
+-    for (u32 i = 0; i < num; ++i) bswap_savefile(&sf[i]);
+-    return write_eeprom_data(&sf, sizeof(sf), ofs);
++    for (i = 0; i < num; ++i) bswap_savefile(&sf[i]);
++    return write_eeprom_data(&sf, num * sizeof(sf[0]), ofs);
+ #endif
+ }
+ 
+@@ -164,10 +166,11 @@
+     return write_eeprom_data(&gSaveBuffer.menuData[slot], num * sizeof(struct MainMenuSaveData), ofs);
+ #else
+     // byteswap the data and then write it
+-    struct MainMenuSaveData md[num];
++    struct MainMenuSaveData md[2]; // num is 1 (one slot) or 2 (slot and backup)
++    u32 i;
+     bcopy(&gSaveBuffer.menuData[slot], md, num * sizeof(md[0]));
+-    for (u32 i = 0; i < num; ++i) bswap_menudata(&md[i]);
+-    return write_eeprom_data(&md, sizeof(md), ofs);
++    for (i = 0; i < num; ++i) bswap_menudata(&md[i]);
++    return write_eeprom_data(&md, num * sizeof(md[0]), ofs);
+ #endif
+ }
+ 
+@@ -317,11 +320,12 @@
+  * Check if the 'EEPROM' save has different endianness (e.g. it's from an actual N64).
+  */
+ static u8 save_file_need_bswap(const struct SaveBuffer *buf) {
++    int i, j;
+     // check all signatures just in case
+-    for (int i = 0; i < 2; ++i) {
++    for (i = 0; i < 2; ++i) {
+         if (buf->menuData[i].signature.magic == BSWAP16(MENU_DATA_MAGIC))
+             return TRUE;
+-        for (int j = 0; j < NUM_SAVE_FILES; ++j) {
++        for (j = 0; j < NUM_SAVE_FILES; ++j) {
+             if (buf->files[j][i].signature.magic == BSWAP16(SAVE_FILE_MAGIC))
+                 return TRUE;
+         }
+@@ -333,9 +337,10 @@
+  * Byteswap all multibyte fields in a SaveBuffer.
+  */
+ static void save_file_bswap(struct SaveBuffer *buf) {
++    int i;
+     bswap_menudata(buf->menuData + 0);
+     bswap_menudata(buf->menuData + 1);
+-    for (int i = 0; i < NUM_SAVE_FILES; ++i) {
++    for (i = 0; i < NUM_SAVE_FILES; ++i) {
+         bswap_savefile(buf->files[i] + 0);
+         bswap_savefile(buf->files[i] + 1);
+     }
+@@ -398,6 +403,9 @@
+ 
+ void save_file_load_all(void) {
+     s32 file;
++#ifndef TEXTSAVES
++    s32 validSlots;
++#endif
+ 
+     gMainMenuDataModified = FALSE;
+     gSaveFileModified = FALSE;
+@@ -411,7 +419,6 @@
+     gSaveFileModified = TRUE;
+     gMainMenuDataModified = TRUE;
+ #else
+-    s32 validSlots;
+     read_eeprom_data(&gSaveBuffer, sizeof(gSaveBuffer));
+ 
+     if (save_file_need_bswap(&gSaveBuffer))

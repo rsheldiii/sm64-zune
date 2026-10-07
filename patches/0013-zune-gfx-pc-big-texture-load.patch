@@ -1,0 +1,60 @@
+--- a/src/pc/gfx/gfx_pc.c	2026-10-05 05:52:32.405380603 -0400
++++ b/src/pc/gfx/gfx_pc.c	2026-10-05 05:52:32.441569258 -0400
+@@ -19,6 +19,7 @@
+ #include "config.h"
+ 
+ #include "gfx_pc.h"
++#include "zune_gbi.h"
+ #include "gfx_cc.h"
+ #include "gfx_window_manager_api.h"
+ #include "gfx_rendering_api.h"
+@@ -340,7 +341,24 @@
+ }
+ 
+ static void import_texture_rgba16(int tile) {
+-    uint8_t rgba32_buf[8192];
++    uint8_t rgba32_small[8192];
++    /* Zune HD: textures loaded with G_ZUNE_LOADBIGBLOCK (the skybox atlas) exceed the stack
++       buffer; they convert into a heap buffer kept for reuse. */
++    static uint8_t *rgba32_big;
++    static uint32_t rgba32_big_size;
++    uint8_t *rgba32_buf = rgba32_small;
++    uint32_t needed = rdp.loaded_texture[tile].size_bytes * 2;
++    if (needed > sizeof(rgba32_small)) {
++        if (needed > rgba32_big_size) {
++            free(rgba32_big);
++            rgba32_big = (uint8_t *)malloc(needed);
++            rgba32_big_size = rgba32_big ? needed : 0;
++        }
++        if (!rgba32_big) {
++            return;
++        }
++        rgba32_buf = rgba32_big;
++    }
+     
+     for (uint32_t i = 0; i < rdp.loaded_texture[tile].size_bytes / 2; i++) {
+         uint16_t col16 = (rdp.loaded_texture[tile].addr[2 * i] << 8) | rdp.loaded_texture[tile].addr[2 * i + 1];
+@@ -1277,6 +1295,13 @@
+     rdp.textures_changed[rdp.texture_to_load.tile_number] = true;
+ }
+ 
++/* Zune HD: G_LOADBLOCK without the 4096-texel limit (zune_gbi.h; the skybox atlas). */
++static void gfx_zune_load_big_block(uint32_t size_bytes) {
++    rdp.loaded_texture[rdp.texture_to_load.tile_number].size_bytes = size_bytes;
++    rdp.loaded_texture[rdp.texture_to_load.tile_number].addr = rdp.texture_to_load.addr;
++    rdp.textures_changed[rdp.texture_to_load.tile_number] = true;
++}
++
+ static void gfx_dp_load_tile(uint8_t tile, uint32_t uls, uint32_t ult, uint32_t lrs, uint32_t lrt) {
+     if (tile == 1) return;
+     SUPPORT_CHECK(tile == G_TX_LOADTILE);
+@@ -1654,6 +1679,9 @@
+             case G_LOADBLOCK:
+                 gfx_dp_load_block(C1(24, 3), C0(12, 12), C0(0, 12), C1(12, 12), C1(0, 12));
+                 break;
++            case G_ZUNE_LOADBIGBLOCK:
++                gfx_zune_load_big_block((uint32_t)cmd->words.w1);
++                break;
+             case G_LOADTILE:
+                 gfx_dp_load_tile(C1(24, 3), C0(12, 12), C0(0, 12), C1(12, 12), C1(0, 12));
+                 break;

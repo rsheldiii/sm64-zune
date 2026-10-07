@@ -1,0 +1,79 @@
+--- a/src/pc/gfx/gfx_pc.c	2026-10-03 08:14:11.005916631 -0400
++++ b/src/pc/gfx/gfx_pc.c	2026-10-03 08:16:18.809131433 -0400
+@@ -752,17 +752,26 @@
+ }
+ 
+ static void gfx_sp_vertex(size_t n_vertices, size_t dest_index, const Vtx *vertices) {
++    /* Zune HD: hoisted out of the per-vertex loop. The stores below may alias rsp, so the
++       compiler reloaded all 16 matrix floats for every vertex, and the aspect-ratio helper
++       did a float divide (79 ns on this ARM11) per vertex. */
++    const float m00 = rsp.MP_matrix[0][0], m01 = rsp.MP_matrix[0][1], m02 = rsp.MP_matrix[0][2], m03 = rsp.MP_matrix[0][3];
++    const float m10 = rsp.MP_matrix[1][0], m11 = rsp.MP_matrix[1][1], m12 = rsp.MP_matrix[1][2], m13 = rsp.MP_matrix[1][3];
++    const float m20 = rsp.MP_matrix[2][0], m21 = rsp.MP_matrix[2][1], m22 = rsp.MP_matrix[2][2], m23 = rsp.MP_matrix[2][3];
++    const float m30 = rsp.MP_matrix[3][0], m31 = rsp.MP_matrix[3][1], m32 = rsp.MP_matrix[3][2], m33 = rsp.MP_matrix[3][3];
++    const float aspect_mul = gfx_adjust_x_for_aspect_ratio(1.0f);
+     for (size_t i = 0; i < n_vertices; i++, dest_index++) {
+         const Vtx_t *v = &vertices[i].v;
+         const Vtx_tn *vn = &vertices[i].n;
+         struct LoadedVertex *d = &rsp.loaded_vertices[dest_index];
++        const float ox = v->ob[0], oy = v->ob[1], oz = v->ob[2];
+         
+-        float x = v->ob[0] * rsp.MP_matrix[0][0] + v->ob[1] * rsp.MP_matrix[1][0] + v->ob[2] * rsp.MP_matrix[2][0] + rsp.MP_matrix[3][0];
+-        float y = v->ob[0] * rsp.MP_matrix[0][1] + v->ob[1] * rsp.MP_matrix[1][1] + v->ob[2] * rsp.MP_matrix[2][1] + rsp.MP_matrix[3][1];
+-        float z = v->ob[0] * rsp.MP_matrix[0][2] + v->ob[1] * rsp.MP_matrix[1][2] + v->ob[2] * rsp.MP_matrix[2][2] + rsp.MP_matrix[3][2];
+-        float w = v->ob[0] * rsp.MP_matrix[0][3] + v->ob[1] * rsp.MP_matrix[1][3] + v->ob[2] * rsp.MP_matrix[2][3] + rsp.MP_matrix[3][3];
++        float x = ox * m00 + oy * m10 + oz * m20 + m30;
++        float y = ox * m01 + oy * m11 + oz * m21 + m31;
++        float z = ox * m02 + oy * m12 + oz * m22 + m32;
++        float w = ox * m03 + oy * m13 + oz * m23 + m33;
+         
+-        x = gfx_adjust_x_for_aspect_ratio(x);
++        x *= aspect_mul;
+         
+         short U = v->tc[0] * rsp.texture_scaling_factor.s >> 16;
+         short V = v->tc[1] * rsp.texture_scaling_factor.t >> 16;
+@@ -870,15 +879,14 @@
+     }
+     
+     if ((rsp.geometry_mode & G_CULL_BOTH) != 0) {
+-        float dx1 = v1->x / (v1->w) - v2->x / (v2->w);
+-        float dy1 = v1->y / (v1->w) - v2->y / (v2->w);
+-        float dx2 = v3->x / (v3->w) - v2->x / (v2->w);
+-        float dy2 = v3->y / (v3->w) - v2->y / (v2->w);
+-        float cross = dx1 * dy2 - dy1 * dx2;
+-        
+-        if ((v1->w < 0) ^ (v2->w < 0) ^ (v3->w < 0)) {
+-            // If one vertex lies behind the eye, negating cross will give the correct result.
+-            // If all vertices lie behind the eye, the triangle will be rejected anyway.
++        /* Zune HD: the same sign test without six float divides per triangle. Multiplying
++           the projected cross product by w1*w2*w2*w3 gives the expression below, whose sign
++           is the original's times sign(w1*w3); the original then flips when an odd number of
++           w are negative (sign(w1*w2*w3)), so the result is this cross times sign(w2). */
++        float cross = (v1->x * v2->w - v2->x * v1->w) * (v3->y * v2->w - v2->y * v3->w)
++                    - (v1->y * v2->w - v2->y * v1->w) * (v3->x * v2->w - v2->x * v3->w);
++        
++        if (v2->w < 0) {
+             cross = -cross;
+         }
+         
+@@ -990,6 +998,9 @@
+     uint32_t tex_height = (rdp.texture_tile.lrt - rdp.texture_tile.ult + 4) / 4;
+     
+     bool z_is_from_0_to_1 = gfx_rapi->z_is_from_0_to_1();
++    /* Zune HD: one reciprocal per triangle instead of two divides per vertex. */
++    const float inv_tex_width = use_texture ? 1.0f / tex_width : 0.0f;
++    const float inv_tex_height = use_texture ? 1.0f / tex_height : 0.0f;
+     
+     for (int i = 0; i < 3; i++) {
+         float z = v_arr[i]->z, w = v_arr[i]->w;
+@@ -1009,8 +1020,8 @@
+                 u += 0.5f;
+                 v += 0.5f;
+             }
+-            buf_vbo[buf_vbo_len++] = u / tex_width;
+-            buf_vbo[buf_vbo_len++] = v / tex_height;
++            buf_vbo[buf_vbo_len++] = u * inv_tex_width;
++            buf_vbo[buf_vbo_len++] = v * inv_tex_height;
+         }
+         
+         if (use_fog) {

@@ -1,0 +1,32 @@
+--- a/src/pc/gfx/gfx_pc.c	2026-10-04 14:00:55.990183602 -0400
++++ b/src/pc/gfx/gfx_pc.c	2026-10-04 14:00:56.009380333 -0400
+@@ -869,7 +869,7 @@
+ }
+ 
+ /* Zune HD: per-frame work counters for the frame stats (zune_main.cpp). */
+-unsigned zune_stat_vertices, zune_stat_triangles_in;
++unsigned zune_stat_vertices, zune_stat_triangles_in, zune_stat_texture_rebinds_skipped;
+ 
+ static inline void zune_store_rgba(float *slot, uint8_t r, uint8_t g, uint8_t b, uint8_t a) {
+     uint8_t *bytes = (uint8_t *)slot;
+@@ -993,8 +993,18 @@
+     for (int i = 0; i < 2; i++) {
+         if (used_textures[i]) {
+             if (rdp.textures_changed[i]) {
+-                gfx_flush();
+-                import_texture(i);
++                /* Zune HD: objects re-set their texture before every draw, which flushed the
++                   batch even when it was the texture already bound (a row of trees, coins or
++                   goombas became one draw each, ~200 us apiece on this device). Same key as
++                   the texture cache (address, format, size) means nothing to do. */
++                const struct TextureHashmapNode *bound = rendering_state.textures[i];
++                if (bound != NULL && bound->texture_addr == rdp.loaded_texture[i].addr &&
++                    bound->fmt == rdp.texture_tile.fmt && bound->siz == rdp.texture_tile.siz) {
++                    zune_stat_texture_rebinds_skipped++;
++                } else {
++                    gfx_flush();
++                    import_texture(i);
++                }
+                 rdp.textures_changed[i] = false;
+             }
+             bool linear_filter = configFiltering && ((rdp.other_mode_h & (3U << G_MDSFT_TEXTFILT)) != G_TF_POINT);

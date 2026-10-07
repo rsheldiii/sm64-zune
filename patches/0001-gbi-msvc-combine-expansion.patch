@@ -1,0 +1,16 @@
+--- a/include/PR/gbi.h
++++ b/include/PR/gbi.h
+@@ -3182,8 +3182,11 @@
+  *		TEXEL0, 0, SHADE, 0, TEXEL0, 0, SHADE, 0)
+  */
+ 
+-#define gDPSetCombineMode(pkt, a, b)	gDPSetCombineLERP(pkt, a, b)
+-#define	gsDPSetCombineMode(a, b)	gsDPSetCombineLERP(a, b)
++/* MSVC's preprocessor passes an argument that expands to a comma list as one argument;
++ * the extra expansion pass makes it re-split G_CC_* into the 16 LERP parameters. */
++#define GBI_EXPAND(x) x
++#define gDPSetCombineMode(pkt, a, b)	GBI_EXPAND(gDPSetCombineLERP(pkt, a, b))
++#define	gsDPSetCombineMode(a, b)	GBI_EXPAND(gsDPSetCombineLERP(a, b))
+ 
+ #define	gDPSetColor(pkt, c, d)						\
+ {									\

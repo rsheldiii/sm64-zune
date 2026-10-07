@@ -1,0 +1,109 @@
+--- a/src/pc/mixer.c	2026-10-02 17:28:50.977022752 -0400
++++ b/src/pc/mixer.c	2026-10-02 17:30:30.060198600 -0400
+@@ -743,36 +743,86 @@
+         vol_wet = state[39];
+     }
+ 
+-    do {
+-        for (c = 0; c < 2; c++) {
+-            for (i = 0; i < 8; i++) {
+-                if ((rate[c] >> 16) > 0) {
+-                    // Increasing volume
+-                    if ((vols[c][i] >> 16) > target[c]) {
+-                        vols[c][i] = target[c] << 16;
++    /* Zune HD (no SIMD): same results, less work per sample. Once every lane of a channel
++       holds the same volume and one more ramp step (with its target clamp) leaves it
++       unchanged, the volume is fixed for the rest of the call: the per-sample ramp multiply
++       and clamps drop out (the common case: notes at a steady volume). */
++    {
++        int settled[2] = {0, 0}, settled_blocks[2] = {0, 0};
++        int32_t settled_mul_dry[2], settled_mul_wet[2], settled_state[2];
++        do {
++            for (c = 0; c < 2; c++) {
++                int16_t *d = dry[c], *w = wet[c];
++                if (settled[c]) {
++                    int32_t md = settled_mul_dry[c], mw = settled_mul_wet[c];
++                    settled_blocks[c]++;
++                    for (i = 0; i < 8; i++) {
++                        d[i] = clamp16((d[i] * 0x7fff + in[i] * md + 0x4000) >> 15);
++                    }
++                    if (flags & A_AUX) {
++                        for (i = 0; i < 8; i++) {
++                            w[i] = clamp16((w[i] * 0x7fff + in[i] * mw + 0x4000) >> 15);
++                        }
+                     }
+                 } else {
+-                    // Decreasing volume
+-                    if ((vols[c][i] >> 16) < target[c]) {
+-                        vols[c][i] = target[c] << 16;
++                    int increasing = (rate[c] >> 16) > 0;
++                    int32_t used = 0, next, again;
++                    int same = 1;
++                    for (i = 0; i < 8; i++) {
++                        if (increasing ? (vols[c][i] >> 16) > target[c] : (vols[c][i] >> 16) < target[c]) {
++                            vols[c][i] = target[c] << 16;
++                        }
++                        d[i] = clamp16((d[i] * 0x7fff + in[i] * (((vols[c][i] >> 16) * vol_dry + 0x4000) >> 15) + 0x4000) >> 15);
++                        if (flags & A_AUX) {
++                            w[i] = clamp16((w[i] * 0x7fff + in[i] * (((vols[c][i] >> 16) * vol_wet + 0x4000) >> 15) + 0x4000) >> 15);
++                        }
++                        vols[c][i] = clamp32((int64_t)vols[c][i] * rate[c] >> 16);
++                    }
++                    /* The volume the next block would use, and the one after: equal means settled. */
++                    for (i = 0; i < 8; i++) {
++                        next = vols[c][i];
++                        if (increasing ? (next >> 16) > target[c] : (next >> 16) < target[c]) {
++                            next = target[c] << 16;
++                        }
++                        if (i == 0) {
++                            used = next;
++                        } else if (next != used) {
++                            same = 0;
++                        }
++                    }
++                    if (same) {
++                        next = clamp32((int64_t)used * rate[c] >> 16);
++                        again = next;
++                        if (increasing ? (again >> 16) > target[c] : (again >> 16) < target[c]) {
++                            again = target[c] << 16;
++                        }
++                        if (again == used) {
++                            settled[c] = 1;
++                            settled_mul_dry[c] = ((used >> 16) * vol_dry + 0x4000) >> 15;
++                            settled_mul_wet[c] = ((used >> 16) * vol_wet + 0x4000) >> 15;
++                            settled_state[c] = next;
++                        }
+                     }
+                 }
+-                dry[c][i] = clamp16((dry[c][i] * 0x7fff + in[i] * (((vols[c][i] >> 16) * vol_dry + 0x4000) >> 15) + 0x4000) >> 15);
++
++                dry[c] += 8;
+                 if (flags & A_AUX) {
+-                    wet[c][i] = clamp16((wet[c][i] * 0x7fff + in[i] * (((vols[c][i] >> 16) * vol_wet + 0x4000) >> 15) + 0x4000) >> 15);
++                    wet[c] += 8;
+                 }
+-                vols[c][i] = clamp32((int64_t)vols[c][i] * rate[c] >> 16);
+             }
+ 
+-            dry[c] += 8;
+-            if (flags & A_AUX) {
+-                wet[c] += 8;
++            nbytes -= 16;
++            in += 8;
++        } while (nbytes > 0);
++
++        for (c = 0; c < 2; c++) {
++            if (settled_blocks[c]) {   /* else vols already holds the last block's result */
++                for (i = 0; i < 8; i++) {
++                    vols[c][i] = settled_state[c];
++                }
+             }
+         }
+-
+-        nbytes -= 16;
+-        in += 8;
+-    } while (nbytes > 0);
++    }
+ 
+     memcpy(state, vols[0], 32);
+     memcpy(state + 16, vols[1], 32);

@@ -1,0 +1,26 @@
+--- a/src/game/behaviors/checkerboard_platform.inc.c
++++ b/src/game/behaviors/checkerboard_platform.inc.c
+@@ -4,6 +4,11 @@
+                                        { 235, { 1.2f, 2.0f, 1.2f }, 11.6f } };
+ 
+ void bhv_checkerboard_elevator_group_init(void) {
++    s32 sp3C;
++    s32 sp38;
++    s32 sp34;
++    s32 i;
++    struct Object *sp2C;
+     // Added to prevent a crash in the vanish cap stage
+     cur_obj_hide();
+     // Here's the theory: Since it is only valid for a few frames, I believe
+@@ -12,11 +17,6 @@
+     // could be trying to render the object when `precision` is set to 3 but
+     // not to 1.
+ 
+-    s32 sp3C;
+-    s32 sp38;
+-    s32 sp34;
+-    s32 i;
+-    struct Object *sp2C;
+     if (o->oBehParams2ndByte == 0)
+         o->oBehParams2ndByte = 65;
+     sp3C = o->oBehParams2ndByte * 10;

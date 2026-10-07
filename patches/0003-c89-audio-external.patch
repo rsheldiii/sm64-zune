@@ -1,0 +1,16 @@
+--- a/src/audio/external.c
++++ b/src/audio/external.c
+@@ -769,12 +769,12 @@
+ }
+ 
+ void create_next_audio_buffer(s16 *samples, u32 num_samples) {
++    s32 writtenCmds;
+     gAudioFrameCount++;
+     if (sGameLoopTicked != 0) {
+         update_game_sound();
+         sGameLoopTicked = 0;
+     }
+-    s32 writtenCmds;
+     synthesis_execute(gAudioCmdBuffers[0], &writtenCmds, samples, num_samples);
+     gAudioRandom = ((gAudioRandom + gAudioFrameCount) * gAudioFrameCount);
+     decrease_sample_dma_ttls();

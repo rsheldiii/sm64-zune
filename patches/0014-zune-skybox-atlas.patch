@@ -1,0 +1,114 @@
+--- a/src/game/skybox.c	2026-10-05 05:52:58.754148537 -0400
++++ b/src/game/skybox.c	2026-10-05 05:53:36.739065283 -0400
+@@ -214,10 +214,111 @@
+  * The row and column are converted into an index into the skybox's tile list, which is then drawn in
+  * world space so that the tiles will rotate with the camera.
+  */
++#ifdef ZUNE_HD
++/* Zune HD: each of the 3x3 tiles loaded its own 32x32 texture, so the sky cost nine draw calls
++ * a frame (~200 us each through this device's GL). The whole 10x8-tile image is copied once
++ * per background into one 320x256 RGBA16 atlas and the nine quads sample their tiles from it,
++ * which gfx_pc then draws as one batch. Texels and texture coordinates are the same as the
++ * per-tile version (each tile still spans texels 0..31 of its own 32x32 block). */
++#include <stdlib.h>
++#include <string.h>
++#include "zune_gbi.h"
++
++#define ZUNE_SKY_W (SKYBOX_COLS * 32)
++#define ZUNE_SKY_H (SKYBOX_ROWS * 32)
++#define ZUNE_SKY_BACKGROUNDS 16
++
++static u8 *sZuneSkyAtlas[ZUNE_SKY_BACKGROUNDS];
++
++static const u8 *zune_sky_atlas(s8 background) {
++    s32 tile;
++    s32 row;
++    u8 *atlas;
++    const u8 *const *tiles;
++
++    if (background < 0 || background >= ZUNE_SKY_BACKGROUNDS) {
++        return NULL;
++    }
++    if (sZuneSkyAtlas[background] != NULL) {
++        return sZuneSkyAtlas[background];
++    }
++    atlas = (u8 *) malloc(ZUNE_SKY_W * ZUNE_SKY_H * 2);
++    if (atlas == NULL) {
++        return NULL;
++    }
++    tiles = *(SkyboxTexture *) segmented_to_virtual(sSkyboxTextures[background]);
++    for (tile = 0; tile < SKYBOX_COLS * SKYBOX_ROWS; tile++) {
++        const u8 *src = (const u8 *) segmented_to_virtual((void *) tiles[tile]);
++        u8 *dst = atlas + ((tile / SKYBOX_COLS) * 32 * ZUNE_SKY_W + (tile % SKYBOX_COLS) * 32) * 2;
++        for (row = 0; row < 32; row++) {
++            memcpy(dst + row * ZUNE_SKY_W * 2, src + row * 32 * 2, 32 * 2);
++        }
++    }
++    sZuneSkyAtlas[background] = atlas;
++    return atlas;
++}
++
++static Vtx *zune_make_skybox_rect(s32 tileIndex, s8 colorIndex) {
++    Vtx *verts = alloc_display_list(4 * sizeof(*verts));
++    s16 x = tileIndex % SKYBOX_COLS * SKYBOX_TILE_WIDTH;
++    s16 y = SKYBOX_HEIGHT - tileIndex / SKYBOX_COLS * SKYBOX_TILE_HEIGHT;
++    s16 s0 = (s16) ((tileIndex % SKYBOX_COLS * 32) << 5);
++    s16 t0 = (s16) ((tileIndex / SKYBOX_COLS * 32) << 5);
++
++    if (verts != NULL) {
++        make_vertex(verts, 0, x, y, -1, s0, t0, sSkyboxColors[colorIndex][0], sSkyboxColors[colorIndex][1],
++                    sSkyboxColors[colorIndex][2], 255);
++        make_vertex(verts, 1, x, y - SKYBOX_TILE_HEIGHT, -1, s0, t0 + (31 << 5), sSkyboxColors[colorIndex][0],
++                    sSkyboxColors[colorIndex][1], sSkyboxColors[colorIndex][2], 255);
++        make_vertex(verts, 2, x + SKYBOX_TILE_WIDTH, y - SKYBOX_TILE_HEIGHT, -1, s0 + (31 << 5), t0 + (31 << 5),
++                    sSkyboxColors[colorIndex][0], sSkyboxColors[colorIndex][1], sSkyboxColors[colorIndex][2], 255);
++        make_vertex(verts, 3, x + SKYBOX_TILE_WIDTH, y, -1, s0 + (31 << 5), t0, sSkyboxColors[colorIndex][0],
++                    sSkyboxColors[colorIndex][1], sSkyboxColors[colorIndex][2], 255);
++    }
++    return verts;
++}
++
++static int zune_draw_skybox_atlas(Gfx **dlist, s8 background, s8 player, s8 colorIndex) {
++    s32 row;
++    s32 col;
++    const u8 *atlas = zune_sky_atlas(background);
++
++    if (atlas == NULL) {
++        return FALSE;
++    }
++    gDPSetTextureImage((*dlist)++, G_IM_FMT_RGBA, G_IM_SIZ_16b, 1, atlas);
++    gDPTileSync((*dlist)++);
++    gDPSetTile((*dlist)++, G_IM_FMT_RGBA, G_IM_SIZ_16b, 0, 0, G_TX_LOADTILE, 0, G_TX_NOMIRROR, G_TX_NOMASK,
++               G_TX_NOLOD, G_TX_NOMIRROR, G_TX_NOMASK, G_TX_NOLOD);
++    gDPLoadSync((*dlist)++);
++    gDPZuneLoadBigBlock((*dlist)++, ZUNE_SKY_W * ZUNE_SKY_H * 2);
++    gDPTileSync((*dlist)++);
++    gDPSetTile((*dlist)++, G_IM_FMT_RGBA, G_IM_SIZ_16b, ZUNE_SKY_W * 2 / 8, 0, G_TX_RENDERTILE, 0, G_TX_CLAMP,
++               G_TX_NOMASK, G_TX_NOLOD, G_TX_CLAMP, G_TX_NOMASK, G_TX_NOLOD);
++    gDPSetTileSize((*dlist)++, G_TX_RENDERTILE, 0, 0, (ZUNE_SKY_W - 1) << G_TEXTURE_IMAGE_FRAC,
++                   (ZUNE_SKY_H - 1) << G_TEXTURE_IMAGE_FRAC);
++    for (row = 0; row < 3; row++) {
++        for (col = 0; col < 3; col++) {
++            s32 tileIndex = sSkyBoxInfo[player].upperLeftTile + row * SKYBOX_COLS + col;
++            Vtx *vertices = zune_make_skybox_rect(tileIndex, colorIndex);
++
++            gSPVertex((*dlist)++, VIRTUAL_TO_PHYSICAL(vertices), 4, 0);
++            gSPDisplayList((*dlist)++, dl_draw_quad_verts_0123);
++        }
++    }
++    return TRUE;
++}
++#endif
++
+ void draw_skybox_tile_grid(Gfx **dlist, s8 background, s8 player, s8 colorIndex) {
+     s32 row;
+     s32 col;
+ 
++#ifdef ZUNE_HD
++    if (zune_draw_skybox_atlas(dlist, background, player, colorIndex)) {
++        return;
++    }
++#endif
+     for (row = 0; row < 3; row++) {
+         for (col = 0; col < 3; col++) {
+             s32 tileIndex = sSkyBoxInfo[player].upperLeftTile + row * SKYBOX_COLS + col;

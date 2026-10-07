@@ -1,0 +1,167 @@
+#!/usr/bin/env bash
+# Build Super Mario 64 for the Zune HD from your own ROM, and install it.
+#
+#   ./sm64zune build ROM [--define NAME=VALUE]...   build the game from your ROM
+#   ./sm64zune deploy                               install it on the Zune HD plugged in over USB
+#   ./sm64zune settings [--define NAME=VALUE]...    list the build settings and their values
+#   ./sm64zune logs                                 receive the log a game sends when it exits
+#   ./sm64zune test                                 run the tests that need no Zune
+#   ./sm64zune clean [--all]                        delete build/ (--all: the downloaded tools too)
+#
+# Needs Docker on x86-64 Linux, and git. The work happens in two containers built on first use.
+set -euo pipefail
+root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+cd "$root"
+
+die() { echo "sm64zune: $*" >&2; exit 1; }
+
+# Builds one of the two images (the Dockerfile's targets) unless it matches its sources.
+image() {
+    local target=$1 tag=sm64-zune-$1 want log=build/logs/docker-$1.log
+    want=$(sha256sum < Dockerfile | cut -c1-16)
+    [[ $(docker image inspect --format '{{index .Config.Labels "sm64zune"}}' "$tag" 2> /dev/null) != "$want" ]] || return 0
+    echo "Building the $target container image (several minutes, once)..."
+    mkdir -p build/logs
+    docker build --target "$target" --label "sm64zune=$want" --tag "$tag" . > "$log" 2>&1 \
+        || { tail -n 30 "$log" >&2; die "the $target image did not build; the full output is $log"; }
+}
+
+# Runs a command in the build container as you, with this directory at /repo (read-only)
+# and build/ at /work. Usage: in_build [docker run options] -- command...
+in_build() {
+    local options=()
+    while [[ $1 != -- ]]; do options+=("$1"); shift; done
+    shift
+    # Your time zone, for the names of received logs.
+    [[ ! -e /etc/localtime ]] || options+=(--mount type=bind,src=/etc/localtime,dst=/etc/localtime,readonly)
+    docker run --rm --init --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges \
+        --env HOME=/work/.home \
+        --mount "type=bind,src=$root,dst=/repo,readonly" --mount "type=bind,src=$root/build,dst=/work" \
+        ${options[@]+"${options[@]}"} sm64-zune-build "$@"
+}
+
+# This computer's address on the local network, for ZUNE_LOG=upload.
+host_address() { ip -4 route get 192.0.2.1 2> /dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p'; }
+
+cmd_build() {
+    local rom='' yes='' arguments=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --yes) yes=1 ;;
+            --define) [[ $# -ge 2 ]] || die '--define needs NAME=VALUE'; arguments+=(--define "$2"); shift ;;
+            --define=*) arguments+=("$1") ;;
+            -*) die "unknown option $1" ;;
+            *) [[ -z $rom ]] || die 'give one ROM'; rom=$1 ;;
+        esac
+        shift
+    done
+    [[ -n $rom ]] || die 'which ROM? Usage: ./sm64zune build path/to/rom.z64'
+    [[ -f $rom ]] || die "$rom: no such file"
+    rom=$(realpath -- "$rom")
+    if [[ ! -f sm64ex/Makefile ]]; then
+        [[ -e .git ]] || die 'sm64ex/ is empty: it is a git submodule, so get this project with git clone, not as a zip.'
+        git submodule update --init sm64ex
+    fi
+    mkdir -p build
+    image build
+    if ! in_build --network none -- python3 /repo/tools/fetch.py --check; then
+        in_build --network none -- python3 /repo/tools/fetch.py --list
+        if [[ -z $yes ]]; then
+            read -r -p 'Download these now? [y/N] ' answer
+            [[ $answer == [yY]* ]] || die 'nothing was downloaded'
+        fi
+        in_build -- python3 /repo/tools/fetch.py
+    fi
+    in_build --network none --mount "type=bind,src=$rom,dst=/rom,readonly" --env "SM64ZUNE_HOST_ADDRESS=$(host_address)" -- \
+        python3 /repo/tools/build.py --stamp "${SM64ZUNE_STAMP:-$(date +%Y%m%d-%H%M%S)}" ${arguments[@]+"${arguments[@]}"}
+    echo 'Next: plug in the Zune HD and run ./sm64zune deploy'
+}
+
+# Prints the USB device node of a Zune HD (045e:063e), looked up fresh: the Zune takes a new
+# address every time it reconnects, which it does after each deployment.
+find_zune() {
+    local device
+    for device in /sys/bus/usb/devices/*; do
+        [[ -r $device/idVendor && $(< "$device/idVendor") == 045e && $(< "$device/idProduct") == 063e ]] || continue
+        printf '/dev/bus/usb/%03d/%03d\n' "$((10#$(< "$device/busnum")))" "$((10#$(< "$device/devnum")))"
+        return 0
+    done
+    return 1
+}
+
+cmd_deploy() {
+    [[ -f build/package/application.cfg ]] || die 'nothing to deploy yet: run ./sm64zune build ROM first'
+    image deploy
+    local build node attempt output step missing
+    build=$(head -n 1 build/package.txt)
+    # Nothing can be read back from a Zune, so this file is the only record of what is on it.
+    record() { printf '%s %s: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$build" "$*" >> build/deploys.log; }
+    if ! find_zune > /dev/null; then
+        echo 'Waiting for a Zune HD on USB (it should show its "connected" screen, with no app open)...'
+        until find_zune > /dev/null; do sleep 2; done
+        sleep 8   # let it finish connecting
+    fi
+    for attempt in 1 2 3; do
+        if node=$(find_zune); then
+            echo "Installing $build on the Zune at $node (about a minute and a half; leave it plugged in)..."
+            record "transfer started via $node; the app on the Zune is unusable until a result line follows"
+            # setsid: Ctrl-C or a closed terminal must not cut the transfer short, because a
+            # half-written app dies at launch. zune-deploy can exit 0 after an error, so
+            # success is its three final steps, not its exit status.
+            output=$(setsid --wait docker run --rm --network none --cap-drop ALL --security-opt no-new-privileges \
+                --read-only --tmpfs /tmp:rw,nosuid,nodev,size=128m --device "$node" \
+                --mount "type=bind,src=$root/build/package,dst=/package,readonly" \
+                sm64-zune-deploy deploy /package --info 2>&1) || true
+            printf '%s\n' "$output" > build/logs/deploy.log
+            missing=''
+            for step in 'Deployed Content' 'Uploaded Container Metadata' 'Closed Game Container'; do
+                grep -q "✓ $step" <<< "$output" || missing+="${missing:+, }$step"
+            done
+            if [[ -z $missing ]]; then
+                record DEPLOYED
+                echo 'Installed. Unplug the Zune and start "Super Mario 64" from its apps menu.'
+                return 0
+            fi
+            record "FAILED: steps not reported: $missing"
+            echo "Attempt $attempt did not finish (steps not reported: $missing)."
+        else
+            echo "Attempt $attempt: the Zune is not on USB right now."
+        fi
+        [[ $attempt == 3 ]] || sleep 12
+    done
+    die 'not installed. Close any app on the Zune, replug it, wait for its "connected" screen and try again. Details: build/logs/deploy.log'
+}
+
+cmd_logs() {
+    mkdir -p build
+    image build
+    local here sends_to
+    here=$(host_address)
+    sends_to=$(sed -n 's/.*ZUNE_LOG_HOST=\([0-9.]*\).*/\1/p' build/package.txt 2> /dev/null || true)
+    if [[ -z $sends_to ]]; then
+        echo 'Note: the last build keeps no log. Build with --define ZUNE_LOG=on and deploy that.'
+    elif [[ $sends_to != "$here" ]]; then
+        echo "Note: the last build sends its log to $sends_to, but this computer is $here. Build and deploy again."
+    fi
+    echo "Waiting for a log on $here:8767 (Ctrl-C to stop); it will be saved in build/logs/zune/."
+    echo 'Unplug the Zune from USB and play. To send the log, leave the game: hold three fingers on the screen.'
+    in_build --publish 8767:8767 -- python3 -u /repo/tools/receive_logs.py
+}
+
+command=${1:-help}
+[[ $# -eq 0 ]] || shift
+case $command in
+    build) cmd_build "$@" ;;
+    deploy) cmd_deploy ;;
+    settings)
+        mkdir -p build; image build
+        in_build --network none --env "SM64ZUNE_HOST_ADDRESS=$(host_address)" -- python3 /repo/tools/settings.py "$@" ;;
+    logs) cmd_logs ;;
+    test) mkdir -p build; image build; in_build --network none -- bash /repo/tests/run.sh ;;
+    clean)
+        if [[ ${1:-} == --all ]]; then rm -rf build
+        elif [[ -d build ]]; then find build -mindepth 1 -maxdepth 1 ! -name toolchain -exec rm -rf {} +
+        fi ;;
+    help | -h | --help) sed -n '2,11s/^# \{0,1\}//p' "${BASH_SOURCE[0]}" ;;
+    *) die "unknown command $command (try ./sm64zune help)" ;;
+esac

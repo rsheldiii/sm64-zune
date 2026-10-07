@@ -1,0 +1,3 @@
+[submodule "sm64ex"]
+	path = sm64ex
+	url = https://github.com/sm64pc/sm64ex

@@ -1,0 +1,21 @@
+--- a/src/game/ingame_menu.c
++++ b/src/game/ingame_menu.c
+@@ -1811,13 +1811,17 @@
+ 
+     render_dialog_box_type(dialog, dialog->linesPerBox);
+ 
++    // MSVC rejects preprocessor directives inside macro arguments.
++#ifdef VERSION_EU
+     gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE,
+                   0,
+                   ensure_nonnegative(DIAG_VAL2 - dialog->width),
+-#ifdef VERSION_EU
+                   SCREEN_WIDTH,
+                   ensure_nonnegative((240 - dialog->width) + ((dialog->linesPerBox * 80) / DIAG_VAL4) / gDialogBoxScale));
+ #else
++    gDPSetScissor(gDisplayListHead++, G_SC_NON_INTERLACE,
++                  0,
++                  ensure_nonnegative(DIAG_VAL2 - dialog->width),
+                   SCREEN_WIDTH,
+                   ensure_nonnegative(240 + ((dialog->linesPerBox * 80) / DIAG_VAL4) - dialog->width));
+ #endif

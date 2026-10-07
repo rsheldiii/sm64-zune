@@ -1,0 +1,19 @@
+--- a/src/engine/surface_collision.c
++++ b/src/engine/surface_collision.c
+@@ -900,6 +900,7 @@
+     Vec3f normalized_dir;
+     f32 step, dx, dz;
+     u32 i;
++    f32 precision;
+     
+     // Set that no surface has been hit
+     *hit_surface = NULL;
+@@ -925,7 +926,7 @@
+ 	}
+ 
+     // increase collision checking precision (normally 1)
+-    f32 precision = gCheckingSurfaceCollisionsForCamera ? 3 : 1;
++    precision = gCheckingSurfaceCollisionsForCamera ? 3 : 1;
+ 
+     // Get cells we cross using DDA
+     if (absx(dir[0]) >= absx(dir[2]))
