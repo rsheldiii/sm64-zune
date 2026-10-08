@@ -43,6 +43,13 @@ in_build() {
 # This computer's address on the local network, for ZUNE_LOG=on.
 host_address() { ip -4 route get 192.0.2.1 2> /dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p'; }
 
+ensure_source() {
+    if [[ ! -f sm64ex/Makefile ]]; then
+        [[ -e .git ]] || die 'sm64ex/ is empty: it is a git submodule, so get this project with git clone, not as a zip.'
+        git submodule update --init sm64ex
+    fi
+}
+
 cmd_build() {
     local rom='' yes='' arguments=()
     while [[ $# -gt 0 ]]; do
@@ -58,10 +65,7 @@ cmd_build() {
     [[ -n $rom ]] || die 'which ROM? Usage: ./sm64zune build path/to/rom.z64'
     [[ -f $rom ]] || die "$rom: no such file"
     rom=$(realpath -- "$rom")
-    if [[ ! -f sm64ex/Makefile ]]; then
-        [[ -e .git ]] || die 'sm64ex/ is empty: it is a git submodule, so get this project with git clone, not as a zip.'
-        git submodule update --init sm64ex
-    fi
+    ensure_source
     mkdir -p build
     image build
     if ! in_build --network none -- python3 /repo/tools/fetch.py --check; then
@@ -157,7 +161,7 @@ case $command in
         mkdir -p build; image build
         in_build --network none --env "SM64ZUNE_HOST_ADDRESS=$(host_address)" -- python3 /repo/tools/settings.py "$@" ;;
     logs) cmd_logs ;;
-    test) mkdir -p build; image build; in_build --network none -- bash /repo/tests/run.sh ;;
+    test) ensure_source; mkdir -p build; image build; in_build --network none -- bash /repo/tests/run.sh ;;
     clean)
         if [[ ${1:-} == --all ]]; then rm -rf build
         elif [[ -d build ]]; then find build -mindepth 1 -maxdepth 1 ! -name toolchain -exec rm -rf {} +
