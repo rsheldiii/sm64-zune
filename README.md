@@ -2,6 +2,8 @@
 
 A port of [sm64ex](https://github.com/sm64pc/sm64ex) to the Zune HD. It plays (mostly) at full speed with sound, touch controls and saves.
 
+https://github.com/user-attachments/assets/324ab135-9fbf-4922-ba69-66deb1880c64
+
 This repository holds no part of the game, and no built game is offered anywhere: you supply
 the ROM during the build process.
 
